@@ -323,7 +323,7 @@ setInterval(async () => {
 
   isRunning = false;
 
-}, 1000 * 60 * 1);
+}, 1000 * 60 * 5);
 
 // ================== ADMIN ==================
 bot.onText(/\/start/, (msg) => {
