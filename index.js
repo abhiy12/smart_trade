@@ -45,21 +45,23 @@ let newsCache = {};
 let lastSignals = {};
 
 // ================== BTC TREND ==================
-async function getBTCTrend() {
+const axios = require('axios');
+
+async function getBTCPrice() {
   try {
     const res = await axios.get(
-            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd'
     );
 
-    const closes = res.data.map((c) => parseFloat(c[4]));
-    const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
+    const price = res.data.bitcoin.usd;
+    console.log("✅ BTC Price:", price);
 
-    return closes.at(-1) > ema20.at(-1) ? 'BULLISH' : 'BEARISH';
-  } catch {
-    return 'NEUTRAL';
+    return price;
+  } catch (err) {
+    console.log("🔥 API ERROR:", err.message);
+    return null;
   }
 }
-
 // ================== TREND (MTF) ==================
 async function getTrend(symbol, interval) {
   try {
