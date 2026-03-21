@@ -48,7 +48,7 @@ let lastSignals = {};
 async function getBTCTrend() {
   try {
     const res = await axios.get(
-      'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
+            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
     );
 
     const closes = res.data.map((c) => parseFloat(c[4]));
