@@ -281,3 +281,25 @@ bot.onText(/\/start/, (msg) => {
   if (msg.chat.id !== ADMIN_ID) return;
   bot.sendMessage(msg.chat.id, '🤖 Bot Running 🚀');
 });
+async function processBatch(symbols, btcTrend) {
+  let sent = 0;
+
+  for (let i = 0; i < symbols.length; i += 10) {
+    const batch = symbols.slice(i, i + 10);
+
+    await Promise.all(
+      batch.map(async (sym) => {
+        if (sent >= 5) return;
+
+        const signal = await generateSignal(sym, btcTrend);
+
+        if (signal) {
+          await postSignal(signal);
+          sent++;
+        }
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
