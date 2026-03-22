@@ -17,6 +17,15 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on ${PORT}`);
 });
+
+const axiosInstance = axios.create({
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive'
+  },
+  timeout: 10000
+});
 // ================== CONFIG ==================
 const token = '8531708840:AAG46vk1SsLTD_c7HSt2UUfB79UyYRGfZEA';
 const ADMIN_ID = 5690207061;
@@ -62,7 +71,7 @@ let lastSignals = {};
 // ================== BTC TREND ==================
 // async function getBTCTrend() {
 //   try {
-//     const res = await axios.get(
+//     const res = await axiosInstance.get(
 //   'https://api1.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
 //   {
 //     headers: {
@@ -81,7 +90,7 @@ let lastSignals = {};
 // }
 async function getBTCTrend() {
   try {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       'https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=50'
     );
 
@@ -99,7 +108,7 @@ async function getBTCTrend() {
 // ================== TREND (MTF) ==================
 // async function getTrend(symbol, interval) {
 //   try {
-//     const res = await axios.get(
+//     const res = await axiosInstance.get(
 //       `https://api2.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=50`,
 //     );
 
@@ -122,7 +131,7 @@ async function getTrend(symbol, interval) {
       '1h': '60'
     };
 
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${mapInterval[interval]}&limit=50`
     );
 
@@ -149,7 +158,7 @@ async function getNewsSentiment(symbol) {
   }
 
   try {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       `https://newsapi.org/v2/everything?q=${coin}&apiKey=${NEWS_API_KEY}`,
     );
 
@@ -170,7 +179,7 @@ async function getNewsSentiment(symbol) {
 
 // ================== TOP COINS ==================
 // async function getTopCoins() {
-//   const res = await axios.get(
+//   const res = await axiosInstance.get(
 //     'https://api3.binance.com/api/v3/ticker/24hr',
 //   );
 
@@ -182,7 +191,7 @@ async function getNewsSentiment(symbol) {
 // }
 async function getTopCoins() {
   try {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       'https://api.bybit.com/v5/market/tickers?category=linear'
     );
 
@@ -199,7 +208,7 @@ async function getTopCoins() {
 // ================== CANDLES ==================
 // async function getCandles(symbol) {
 //   try {
-//     const res = await axios.get(
+//     const res = await axiosInstance.get(
 //       `https://api4.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`,
 //     );
 //     return res.data;
@@ -210,7 +219,7 @@ async function getTopCoins() {
 
 async function getCandles(symbol) {
   try {
-    const res = await axios.get(
+    const res = await axiosInstance.get(
       `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=15&limit=100`
     );
 
