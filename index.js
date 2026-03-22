@@ -19,12 +19,14 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 const axiosInstance = axios.create({
+  baseURL: 'https://api.bybit.com',
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     'Accept': 'application/json',
-    'Connection': 'keep-alive'
+    'Referer': 'https://www.bybit.com/',
+    'Origin': 'https://www.bybit.com'
   },
-  timeout: 10000
+  timeout: 15000
 });
 // ================== CONFIG ==================
 const token = '8531708840:AAG46vk1SsLTD_c7HSt2UUfB79UyYRGfZEA';
