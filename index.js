@@ -1,18 +1,19 @@
-// ================== EXPRESS SERVER (RENDER FIX) ==================
+// ================== RENDER SERVER FIX ==================
 const express = require('express');
 const app = express();
 
+// IMPORTANT: Render gives dynamic port
 const PORT = process.env.PORT || 3000;
 
-// Health check route (VERY IMPORTANT)
+// Root route (health check)
 app.get('/', (req, res) => {
-  res.send('🚀 Trading Bot Running');
+  res.send('🚀 Trading Bot is LIVE');
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+// START SERVER
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on ${PORT}`);
 });
-
 
 // ================== IMPORTS ==================
 const TelegramBot = require('node-telegram-bot-api');
