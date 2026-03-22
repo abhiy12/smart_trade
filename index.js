@@ -37,6 +37,7 @@ const bot = new TelegramBot(token, {
     }
   }
 });
+bot.deleteWebHook();
 bot.on("polling_error", (error) => {
   console.log("⚠️ Polling Error:", error.message);
 });
