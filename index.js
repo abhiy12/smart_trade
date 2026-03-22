@@ -1,3 +1,19 @@
+// ================== EXPRESS SERVER (RENDER FIX) ==================
+const express = require('express');
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+// Health check route (VERY IMPORTANT)
+app.get('/', (req, res) => {
+  res.send('🚀 Trading Bot Running');
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
+
+
 // ================== IMPORTS ==================
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
@@ -323,7 +339,7 @@ setInterval(async () => {
 
   isRunning = false;
 
-}, 1000 * 60 * 1);
+}, 1000 * 60 * 5);
 
 // ================== ADMIN ==================
 bot.onText(/\/start/, (msg) => {
