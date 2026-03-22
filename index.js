@@ -3,6 +3,20 @@ const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const ti = require('technicalindicators');
 
+
+// ================== RENDER SERVER FIX ==================
+const express = require('express');
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('🚀 Trading Bot is LIVE');
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on ${PORT}`);
+});
 // ================== CONFIG ==================
 const token = '8531708840:AAG46vk1SsLTD_c7HSt2UUfB79UyYRGfZEA';
 const ADMIN_ID = 5690207061;
@@ -48,8 +62,13 @@ let lastSignals = {};
 async function getBTCTrend() {
   try {
     const res = await axios.get(
-      'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
-    );
+  'https://api1.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
+  {
+    headers: {
+      'User-Agent': 'Mozilla/5.0'
+    }
+  }
+);
 
     const closes = res.data.map((c) => parseFloat(c[4]));
     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
