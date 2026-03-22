@@ -15,6 +15,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on ${PORT}`);
 });
 
+const res = await axios.get(url, {
+  headers: {
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': 'application/json'
+  }
+});
 // ================== IMPORTS ==================
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
