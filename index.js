@@ -60,34 +60,73 @@ let newsCache = {};
 let lastSignals = {};
 
 // ================== BTC TREND ==================
+// async function getBTCTrend() {
+//   try {
+//     const res = await axios.get(
+//   'https://api1.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
+//   {
+//     headers: {
+//       'User-Agent': 'Mozilla/5.0'
+//     }
+//   }
+// );
+
+//     const closes = res.data.map((c) => parseFloat(c[4]));
+//     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
+
+//     return closes.at(-1) > ema20.at(-1) ? 'BULLISH' : 'BEARISH';
+//   } catch {
+//     return 'NEUTRAL';
+//   }
+// }
 async function getBTCTrend() {
   try {
     const res = await axios.get(
-  'https://api1.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50',
-  {
-    headers: {
-      'User-Agent': 'Mozilla/5.0'
-    }
-  }
-);
+      'https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=50'
+    );
 
-    const closes = res.data.map((c) => parseFloat(c[4]));
+    const closes = res.data.result.list.map(c => parseFloat(c[4])).reverse();
+
     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
 
     return closes.at(-1) > ema20.at(-1) ? 'BULLISH' : 'BEARISH';
+
   } catch {
     return 'NEUTRAL';
   }
 }
 
 // ================== TREND (MTF) ==================
+// async function getTrend(symbol, interval) {
+//   try {
+//     const res = await axios.get(
+//       `https://api2.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=50`,
+//     );
+
+//     const closes = res.data.map((c) => parseFloat(c[4]));
+
+//     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
+//     const ema50 = ti.EMA.calculate({ values: closes, period: 50 });
+
+//     if (!ema20.length || !ema50.length) return 'NEUTRAL';
+
+//     return ema20.at(-1) > ema50.at(-1) ? 'UP' : 'DOWN';
+//   } catch {
+//     return 'NEUTRAL';
+//   }
+// 
 async function getTrend(symbol, interval) {
   try {
+    const mapInterval = {
+      '15m': '15',
+      '1h': '60'
+    };
+
     const res = await axios.get(
-      `https://api2.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=50`,
+      `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${mapInterval[interval]}&limit=50`
     );
 
-    const closes = res.data.map((c) => parseFloat(c[4]));
+    const closes = res.data.result.list.map(c => parseFloat(c[4])).reverse();
 
     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
     const ema50 = ti.EMA.calculate({ values: closes, period: 50 });
@@ -95,6 +134,7 @@ async function getTrend(symbol, interval) {
     if (!ema20.length || !ema50.length) return 'NEUTRAL';
 
     return ema20.at(-1) > ema50.at(-1) ? 'UP' : 'DOWN';
+
   } catch {
     return 'NEUTRAL';
   }
@@ -129,26 +169,62 @@ async function getNewsSentiment(symbol) {
 }
 
 // ================== TOP COINS ==================
+// async function getTopCoins() {
+//   const res = await axios.get(
+//     'https://api3.binance.com/api/v3/ticker/24hr',
+//   );
+
+//   return res.data
+//     .filter((c) => c.symbol.endsWith('USDT'))
+//     .sort((a, b) => b.quoteVolume - a.quoteVolume)
+//     .slice(0, 100)
+//     .map((c) => c.symbol);
+// }
 async function getTopCoins() {
-  const res = await axios.get(
-    'https://api3.binance.com/api/v3/ticker/24hr',
-  );
+  try {
+    const res = await axios.get(
+      'https://api.bybit.com/v5/market/tickers?category=linear'
+    );
 
-  return res.data
-    .filter((c) => c.symbol.endsWith('USDT'))
-    .sort((a, b) => b.quoteVolume - a.quoteVolume)
-    .slice(0, 100)
-    .map((c) => c.symbol);
+    return res.data.result.list
+      .sort((a, b) => b.turnover24h - a.turnover24h)
+      .slice(0, 100)
+      .map(c => c.symbol);
+
+  } catch (err) {
+    console.log("❌ Bybit Error:", err.message);
+    return [];
+  }
 }
-
 // ================== CANDLES ==================
+// async function getCandles(symbol) {
+//   try {
+//     const res = await axios.get(
+//       `https://api4.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`,
+//     );
+//     return res.data;
+//   } catch {
+//     return [];
+//   }
+// }
+
 async function getCandles(symbol) {
   try {
     const res = await axios.get(
-      `https://api4.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`,
+      `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=15&limit=100`
     );
-    return res.data;
-  } catch {
+
+    return res.data.result.list.map(c => [
+      0,
+      parseFloat(c[1]), // open
+      parseFloat(c[2]), // high
+      parseFloat(c[3]), // low
+      parseFloat(c[4]), // close
+      parseFloat(c[5])  // volume
+    ]).reverse();
+
+  } catch (err) {
+    console.log("❌ Bybit Error:", err.message);
     return [];
   }
 }
