@@ -1,16 +1,8 @@
-
-const express = require('express');
-const app = express();
-
-app.get('/', (req, res) => {
-  res.send('Bot is alive 🤖');
-});
-
-app.listen(process.env.PORT || 3000);
 // ================== IMPORTS ==================
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const ti = require('technicalindicators');
+const express = require('express');
 
 // ================== CONFIG ==================
 const token = '8531708840:AAFxFMz_lQ8Bx0iWn-2_fkJPV0Ydv4xdjQE';
@@ -20,27 +12,116 @@ const CHANNELS = [-1003784336023];
 
 const NEWS_API_KEY = '114c0dfb27784d339652844d4ed24f41';
 
-// ================== START ==================
-console.log('🚀 Bot Starting...');
-// const bot = new TelegramBot(token, { polling: true });
-const bot = new TelegramBot(token, {
-  polling: {
-    interval: 3000,
-    autoStart: true,
-    params: {
-      timeout: 10
-    }
-  }
-});
-bot.on("polling_error", (error) => {
-  console.log("⚠️ Polling Error:", error.message);
-});
+const PORT = process.env.PORT || 3000;
+const RAILWAY_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : null;
 
 // ================== ERROR ==================
 process.on('uncaughtException', (err) =>
   console.log('🔥', err.stack),
 );
 process.on('unhandledRejection', (err) => console.log('🔥', err));
+
+// ================== EXPRESS SETUP ==================
+const app = express();
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.send('Bot is alive 🤖');
+});
+
+// ================== START ==================
+console.log('🚀 Bot Starting...');
+
+let bot;
+
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`🌐 Express listening on port ${PORT}`);
+
+  if (RAILWAY_DOMAIN) {
+    // ── Webhook mode (production) ──────────────────────────────────────────
+    console.log('🔗 Starting in webhook mode...');
+    bot = new TelegramBot(token, {
+      webHook: { port: PORT, host: '0.0.0.0', key: null, cert: null },
+    });
+
+    const webhookUrl = `${RAILWAY_DOMAIN}/bot${token}`;
+    try {
+      await bot.setWebHook(webhookUrl);
+      console.log(`✅ Webhook set: ${webhookUrl}`);
+    } catch (err) {
+      console.log('❌ Failed to set webhook:', err.message);
+    }
+
+    // Register the webhook route on our Express app
+    app.post(`/bot${token}`, (req, res) => {
+      bot.processUpdate(req.body);
+      res.sendStatus(200);
+    });
+  } else {
+    // ── Polling mode (local / fallback) ────────────────────────────────────
+    console.log('📡 No RAILWAY_PUBLIC_DOMAIN found — starting in polling mode...');
+    bot = new TelegramBot(token, {
+      polling: {
+        interval: 3000,
+        autoStart: true,
+        params: { timeout: 10 },
+      },
+    });
+
+    let pollingErrors = 0;
+    const MAX_POLLING_ERRORS = 5;
+    let backoffMs = 1000;
+
+    bot.on('polling_error', (error) => {
+      pollingErrors++;
+      console.log(
+        `⚠️ Polling Error [${pollingErrors}/${MAX_POLLING_ERRORS}]:`,
+        error.code || error.message,
+        '| Details:', error.message,
+      );
+
+      if (pollingErrors >= MAX_POLLING_ERRORS) {
+        console.log(`🛑 Too many polling errors (${MAX_POLLING_ERRORS}). Stopping polling.`);
+        bot.stopPolling();
+        return;
+      }
+
+      // Exponential backoff: restart polling after a delay
+      console.log(`⏳ Retrying polling in ${backoffMs}ms...`);
+      setTimeout(() => {
+        bot.startPolling();
+        backoffMs = Math.min(backoffMs * 2, 30000); // cap at 30 s
+      }, backoffMs);
+    });
+  }
+
+  // ── Graceful shutdown ────────────────────────────────────────────────────
+  process.on('SIGTERM', async () => {
+    console.log('🛑 SIGTERM received, stopping bot...');
+    try {
+      await bot.close();
+    } catch (e) {
+      console.log('Error closing bot:', e.message);
+    }
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('🛑 SIGINT received, stopping bot...');
+    try {
+      await bot.close();
+    } catch (e) {
+      console.log('Error closing bot:', e.message);
+    }
+    process.exit(0);
+  });
+
+  // ── Start the market-scan loop once the bot is ready ────────────────────
+  startLoop();
+  registerCommands();
+});
 
 // ================== HELPERS ==================
 function formatPrice(price) {
@@ -308,53 +389,58 @@ async function processBatch(symbols, btcTrend) {
 }
 
 // ================== LOOP ==================
-let isRunning = false;
-setInterval(async () => {
-  if (isRunning) {
-    console.log("⏸️ Previous scan still running...");
-    return;
-  }
+function startLoop() {
+  let isRunning = false;
 
-  isRunning = true;
+  setInterval(async () => {
+    if (isRunning) {
+      console.log("⏸️ Previous scan still running...");
+      return;
+    }
 
-  try {
-    console.log("🔄 Market Scan Start...");
+    isRunning = true;
 
-    const btcTrend = await getBTCTrend();
-    console.log("📊 BTC Trend:", btcTrend);
+    try {
+      console.log("🔄 Market Scan Start...");
 
-    const symbols = await getTopCoins();
-    await processBatch(symbols, btcTrend);
+      const btcTrend = await getBTCTrend();
+      console.log("📊 BTC Trend:", btcTrend);
 
-  } catch (err) {
-    console.log("🔥 LOOP ERROR:", err.message);
-  }
+      const symbols = await getTopCoins();
+      await processBatch(symbols, btcTrend);
 
-  isRunning = false;
+    } catch (err) {
+      console.log("🔥 LOOP ERROR:", err.message);
+    }
 
-}, 1000 * 60 * 1);
+    isRunning = false;
+
+  }, 1000 * 60 * 1);
+}
 
 // ================== ADMIN ==================
-bot.onText(/\/start/, (msg) => {
-  if (msg.chat.id !== ADMIN_ID) {
-    bot.sendMessage(msg.chat.id, "❌ You are not authorized");
-    return;
-  }
+function registerCommands() {
+  bot.onText(/\/start/, (msg) => {
+    if (msg.chat.id !== ADMIN_ID) {
+      bot.sendMessage(msg.chat.id, "❌ You are not authorized");
+      return;
+    }
 
-  bot.sendMessage(msg.chat.id, '🤖 Bot Running 🚀');
-});
-
-bot.onText(/\/test/, async (msg) => {
-  if (msg.chat.id !== ADMIN_ID) return;
-
-  await postSignal({
-    coin: 'TEST',
-    type: 'BUY',
-    entry: '0',
-    sl: '0',
-    targets: ['0', '0'],
-    confidence: 7,
+    bot.sendMessage(msg.chat.id, '🤖 Bot Running 🚀');
   });
 
-  bot.sendMessage(msg.chat.id, '✅ Test sent');
-});
+  bot.onText(/\/test/, async (msg) => {
+    if (msg.chat.id !== ADMIN_ID) return;
+
+    await postSignal({
+      coin: 'TEST',
+      type: 'BUY',
+      entry: '0',
+      sl: '0',
+      targets: ['0', '0'],
+      confidence: 7,
+    });
+
+    bot.sendMessage(msg.chat.id, '✅ Test sent');
+  });
+}
