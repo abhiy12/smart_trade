@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 
 // ================== CONFIG ==================
-const token = '8531708840:AAG46vk1SsLTD_c7HSt2UUfB79UyYRGfZEA'; // ✅ secure
+const token = '8531708840:AAEscVJQCh2dlGDHcWGqqGUSZLVc09VLKqA'; // ✅ secure
 const ADMIN_ID = 5690207061;
 const CHANNELS = [-1003784336023];
 const NEWS_API_KEY = '114c0dfb27784d339652844d4ed24f41';
