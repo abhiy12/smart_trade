@@ -1,3 +1,12 @@
+
+const express = require('express');
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('Bot is alive 🤖');
+});
+
+app.listen(process.env.PORT || 3000);
 // ================== IMPORTS ==================
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
