@@ -24,10 +24,21 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ================== TELEGRAM BOT ==================
-const bot = new TelegramBot(token, { polling: true });
+// const bot = new TelegramBot(token, { polling: true });
 
-bot.on("polling_error", (err) => {
-  console.log("⚠️ Polling Error:", err.message);
+// bot.on("polling_error", (err) => {
+//   console.log("⚠️ Polling Error:", err.message);
+// });
+const bot = new TelegramBot(token);
+
+// ✅ Set webhook for Render
+const URL = process.env.RENDER_APP_URL || "https://your-app-name.onrender.com";
+bot.setWebHook(`${URL}/bot${token}`);
+
+// ✅ Webhook route
+app.post(`/bot${token}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
 
 // ================== HELPERS ==================
