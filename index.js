@@ -42,6 +42,21 @@ process.on('uncaughtException', (err) =>
 );
 process.on('unhandledRejection', (err) => console.log('🔥', err));
 
+// ================== GRACEFUL SHUTDOWN ==================
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM received, stopping bot...');
+  await bot.stopPolling();
+  console.log('✅ Bot polling stopped');
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('🛑 SIGINT received, stopping bot...');
+  await bot.stopPolling();
+  console.log('✅ Bot polling stopped');
+  process.exit(0);
+});
+
 // ================== HELPERS ==================
 function formatPrice(price) {
   if (price < 1) return price.toFixed(5);
