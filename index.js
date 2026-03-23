@@ -8,13 +8,12 @@ const app = express();
 app.use(express.json());
 
 // ================== CONFIG ==================
-const token = '8531708840:AAEscVJQCh2dlGDHcWGqqGUSZLVc09VLKqA'; // ✅ secure
-const ADMIN_ID = 5690207061;
-const CHANNELS = [-1003784336023];
-const NEWS_API_KEY = '114c0dfb27784d339652844d4ed24f41';
-
-// 🌐 Your Render URL (CHANGE THIS)
-const URL = "https://your-app-name.onrender.com";
+const token = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN';
+const ADMIN_ID = Number(process.env.ADMIN_ID) || 5690207061;
+const CHANNELS = process.env.CHANNELS
+  ? process.env.CHANNELS.split(',').map(c => Number(c))
+  : [-1003784336023];
+const NEWS_API_KEY = process.env.NEWS_API_KEY || 'YOUR_NEWS_API_KEY';
 
 // ================== SERVER ==================
 const PORT = process.env.PORT || 3000;
@@ -23,26 +22,18 @@ app.get('/', (req, res) => {
   res.send('🚀 Trading Bot is LIVE');
 });
 
-// ================== TELEGRAM BOT (WEBHOOK) ==================
-const bot = new TelegramBot(token);
-
-// ✅ Set webhook
-bot.setWebHook(`${URL}/bot${token}`);
-
-// ✅ Webhook route
-app.post(`/bot${token}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on ${PORT}`);
 });
 
-// ================== ERROR ==================
-process.on('uncaughtException', (err) =>
-  console.log('🔥', err.stack),
-);
+// ================== TELEGRAM BOT (POLLING) ==================
+const bot = new TelegramBot(token, { polling: true });
+bot.on("polling_error", (err) => {
+  console.log("⚠️ Polling Error:", err.message);
+});
+
+// ================== ERROR HANDLING ==================
+process.on('uncaughtException', (err) => console.log('🔥', err.stack));
 process.on('unhandledRejection', (err) => console.log('🔥', err));
 
 // ================== AXIOS ==================
@@ -74,69 +65,54 @@ function formatPrice(price) {
   return price.toFixed(2);
 }
 
-// ================== CACHE ==================
 let newsCache = {};
 let lastSignals = {};
 
-// ================== BTC TREND ==================
+// ================== BYBIT FUNCTIONS ==================
 async function getBTCTrend() {
   try {
     const res = await safeRequest(
       'https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=50'
     );
-
     const closes = res.data.result.list.map(c => parseFloat(c[4])).reverse();
     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
-
     return closes.at(-1) > ema20.at(-1) ? 'BULLISH' : 'BEARISH';
   } catch {
     return 'NEUTRAL';
   }
 }
 
-// ================== TREND ==================
 async function getTrend(symbol, interval) {
   try {
     const mapInterval = { '15m': '15', '1h': '60' };
-
     const res = await safeRequest(
       `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${mapInterval[interval]}&limit=50`
     );
-
     const closes = res.data.result.list.map(c => parseFloat(c[4])).reverse();
-
     const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
     const ema50 = ti.EMA.calculate({ values: closes, period: 50 });
-
     if (!ema20.length || !ema50.length) return 'NEUTRAL';
-
     return ema20.at(-1) > ema50.at(-1) ? 'UP' : 'DOWN';
   } catch {
     return 'NEUTRAL';
   }
 }
 
-// ================== NEWS ==================
 async function getNewsSentiment(symbol) {
   const coin = symbol.replace('USDT', '');
-
   if (newsCache[coin] && Date.now() - newsCache[coin].time < 600000) {
     return newsCache[coin].score;
   }
-
   try {
     const res = await axiosInstance.get(
       `https://newsapi.org/v2/everything?q=${coin}&apiKey=${NEWS_API_KEY}`,
     );
-
     let score = 0;
-
     res.data.articles.slice(0, 5).forEach((a) => {
       const text = (a.title + (a.description || '')).toLowerCase();
       if (text.includes('bull') || text.includes('up')) score++;
       if (text.includes('bear') || text.includes('down')) score--;
     });
-
     newsCache[coin] = { score, time: Date.now() };
     return score;
   } catch {
@@ -144,31 +120,24 @@ async function getNewsSentiment(symbol) {
   }
 }
 
-// ================== TOP COINS ==================
 async function getTopCoins() {
   try {
-    const res = await safeRequest(
-      'https://api.bybit.com/v5/market/tickers?category=linear'
-    );
-
+    const res = await safeRequest('https://api.bybit.com/v5/market/tickers?category=linear');
     return res.data.result.list
       .sort((a, b) => b.turnover24h - a.turnover24h)
       .slice(0, 100)
       .map(c => c.symbol);
-
   } catch (err) {
     console.log("❌ Bybit Error:", err.message);
     return [];
   }
 }
 
-// ================== CANDLES ==================
 async function getCandles(symbol) {
   try {
     const res = await safeRequest(
       `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=15&limit=100`
     );
-
     return res.data.result.list.map(c => [
       0,
       parseFloat(c[1]),
@@ -177,24 +146,21 @@ async function getCandles(symbol) {
       parseFloat(c[4]),
       parseFloat(c[5])
     ]).reverse();
-
   } catch (err) {
     console.log("❌ Bybit Error:", err.message);
     return [];
   }
 }
 
-// ================== SIGNAL ==================
-// ✅ YOUR LOGIC — UNCHANGED
+// ================== SIGNAL LOGIC ==================
 async function generateSignal(symbol, btcTrend) {
   const candles = await getCandles(symbol);
   if (!candles.length) return null;
 
-  const closes = candles.map((c) => parseFloat(c[4]));
-  const highs = candles.map((c) => parseFloat(c[2]));
-  const lows = candles.map((c) => parseFloat(c[3]));
-  const volumes = candles.map((c) => parseFloat(c[5]));
-
+  const closes = candles.map(c => c[4]);
+  const highs = candles.map(c => c[2]);
+  const lows = candles.map(c => c[3]);
+  const volumes = candles.map(c => c[5]);
   const price = closes.at(-1);
 
   const trend15m = await getTrend(symbol, '15m');
@@ -204,13 +170,7 @@ async function generateSignal(symbol, btcTrend) {
   const rsi = ti.RSI.calculate({ values: closes, period: 14 });
   const ema20 = ti.EMA.calculate({ values: closes, period: 20 });
   const ema50 = ti.EMA.calculate({ values: closes, period: 50 });
-
-  const macd = ti.MACD.calculate({
-    values: closes,
-    fastPeriod: 12,
-    slowPeriod: 26,
-    signalPeriod: 9,
-  });
+  const macd = ti.MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 });
 
   const lastRSI = rsi.at(-1);
   const lastEMA20 = ema20.at(-1);
@@ -221,7 +181,6 @@ async function generateSignal(symbol, btcTrend) {
 
   const support = lows.slice(-20).reduce((a, b) => a + b, 0) / 20;
   const resistance = highs.slice(-20).reduce((a, b) => a + b, 0) / 20;
-
   const range = resistance - support;
   if (range / price < 0.01) return null;
 
@@ -235,15 +194,12 @@ async function generateSignal(symbol, btcTrend) {
   const breakoutDown = price < lastLow * 0.998;
 
   let confidence = 0;
-
   if (lastRSI < 35) confidence++;
   if (price > lastEMA20 && lastEMA20 > lastEMA50) confidence++;
   if (lastMACD.MACD > lastMACD.signal) confidence++;
   if (volumeSpike) confidence++;
-
   if (btcTrend === 'BULLISH') confidence++;
   if (btcTrend === 'BEARISH') confidence--;
-
   if (breakoutUp || breakoutDown) confidence += 2;
 
   let type = 'HOLD';
@@ -255,7 +211,6 @@ async function generateSignal(symbol, btcTrend) {
   lastSignals[symbol] = type;
 
   let sl, targets;
-
   if (type === 'BUY') {
     sl = support * 0.995;
     const risk = price - sl;
@@ -274,12 +229,12 @@ async function generateSignal(symbol, btcTrend) {
     type,
     entry: formatPrice(price),
     sl: formatPrice(sl),
-    targets: targets.map((t) => formatPrice(t)),
+    targets: targets.map(formatPrice),
     confidence,
   };
 }
 
-// ================== REST SAME ==================
+// ================== POST SIGNAL ==================
 function formatSignal(d) {
   return `🔥 PRO SIGNAL 🔥\n\n🚀 ${d.coin} → ${d.type}\n💪 Confidence: ${d.confidence}/7\n\n💰 Entry: ${d.entry}\n🛑 SL: ${d.sl}\n\n🎯 Targets:\n${d.targets.map((t, i) => `TP${i + 1}: ${t}`).join('\n')}\n\n⚠️ Trade at your own risk`;
 }
@@ -295,37 +250,25 @@ async function postSignal(signal) {
   }
 }
 
+// ================== BATCH PROCESS ==================
 async function processBatch(symbols, btcTrend) {
   let sent = 0;
-
   for (let i = 0; i < symbols.length; i += 10) {
     const batch = symbols.slice(i, i + 10);
-
-    await Promise.all(
-      batch.map(async (sym) => {
-        if (sent >= 5) return;
-
-        const signal = await generateSignal(sym, btcTrend);
-
-        if (signal) {
-          await postSignal(signal);
-          sent++;
-        }
-      })
-    );
-
-    await new Promise((r) => setTimeout(r, 2000));
+    await Promise.all(batch.map(async (sym) => {
+      if (sent >= 5) return;
+      const signal = await generateSignal(sym, btcTrend);
+      if (signal) { await postSignal(signal); sent++; }
+    }));
+    await new Promise(r => setTimeout(r, 2000));
   }
 }
 
 // ================== LOOP ==================
 let isRunning = false;
-
 setInterval(async () => {
   if (isRunning) return;
-
   isRunning = true;
-
   try {
     const btcTrend = await getBTCTrend();
     const symbols = await getTopCoins();
@@ -333,12 +276,10 @@ setInterval(async () => {
   } catch (err) {
     console.log("🔥 LOOP ERROR:", err.message);
   }
-
   isRunning = false;
-
 }, 1000 * 60 * 5);
 
-// ================== ADMIN ==================
+// ================== ADMIN COMMANDS ==================
 bot.onText(/\/start/, (msg) => {
   if (msg.chat.id !== ADMIN_ID) return;
   bot.sendMessage(msg.chat.id, '🤖 Bot Running 🚀');
@@ -346,7 +287,6 @@ bot.onText(/\/start/, (msg) => {
 
 bot.onText(/\/test/, async (msg) => {
   if (msg.chat.id !== ADMIN_ID) return;
-
   await postSignal({
     coin: 'TEST',
     type: 'BUY',
@@ -355,6 +295,5 @@ bot.onText(/\/test/, async (msg) => {
     targets: ['0', '0'],
     confidence: 7,
   });
-
   bot.sendMessage(msg.chat.id, '✅ Test sent');
 });
