@@ -8,18 +8,16 @@ const app = express();
 app.use(express.json());
 
 // ================== CONFIG ==================
-const TOKEN = process.env.TELEGRAM_TOKEN;  // set in Render environment variables
+const TOKEN = process.env.TELEGRAM_TOKEN;  // Telegram Bot token
 const ADMIN_ID = Number(process.env.ADMIN_ID || '5690207061');
 const CHANNELS = JSON.parse(process.env.CHANNELS || '[-1003784336023]');
-const NEWS_API_KEY = process.env.NEWS_API_KEY;
-
-const RENDER_URL = process.env.RENDER_APP_URL; // your Render app URL
+const RENDER_URL = process.env.RENDER_APP_URL; // Render app URL
 
 // ================== TELEGRAM BOT ==================
 const bot = new TelegramBot(TOKEN);
 bot.setWebHook(`${RENDER_URL}/bot${TOKEN}`);
 
-// Webhook endpoint for Telegram
+// Webhook endpoint
 app.post(`/bot${TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
@@ -27,25 +25,11 @@ app.post(`/bot${TOKEN}`, (req, res) => {
 
 // ================== SERVER ==================
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('🚀 Trading Bot is LIVE'));
+app.get('/', (req, res) => res.send('🚀 CoinGecko Trading Bot is LIVE'));
 app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on ${PORT}`));
 
-// ================== AXIOS ==================
-const axiosInstance = axios.create({
-  baseURL: 'https://api.bybit.com',
-  headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
-  timeout: 15000,
-});
-
-async function safeRequest(url) {
-  try {
-    return await axiosInstance.get(url);
-  } catch (err) {
-    console.log("⚠️ Retry:", url);
-    await new Promise(r => setTimeout(r, 2000));
-    return await axiosInstance.get(url);
-  }
-}
+// ================== CACHE ==================
+let lastSignals = {};
 
 // ================== HELPERS ==================
 function formatPrice(price) {
@@ -54,47 +38,42 @@ function formatPrice(price) {
   return price.toFixed(2);
 }
 
-// ================== CACHE ==================
-let lastSignals = {};
-
-// ================== GET TOP COINS (LIMITED) ==================
-async function getTopCoins() {
+// ================== COINGECKO API ==================
+async function getTopCoins(limit = 10) {
   try {
-    const res = await safeRequest('/v5/market/tickers?category=linear');
-    // Limit to top 10 to reduce API calls
-    return res.data.result.list
-      .sort((a, b) => b.turnover24h - a.turnover24h)
-      .slice(0, 10)
-      .map(c => c.symbol);
+    const res = await axios.get(`https://api.coingecko.com/api/v3/coins/markets`, {
+      params: {
+        vs_currency: 'usd',
+        order: 'market_cap_desc',
+        per_page: limit,
+        page: 1,
+        price_change_percentage: '1h'
+      }
+    });
+    return res.data.map(c => c.id); // CoinGecko coin IDs
   } catch (err) {
-    console.log("❌ Bybit Error:", err.message);
+    console.log("❌ CoinGecko Error:", err.message);
     return [];
   }
 }
 
-// ================== GET CANDLES ==================
-async function getCandles(symbol, interval = 15, limit = 50) {
+async function getCandles(coinId = 'bitcoin', days = 1, interval = 'hourly') {
   try {
-    const res = await safeRequest(
-      `/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`
+    const res = await axios.get(
+      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`,
+      { params: { vs_currency: 'usd', days, interval } }
     );
-    return res.data.result.list.map(c => [
-      0,
-      parseFloat(c[1]),
-      parseFloat(c[2]),
-      parseFloat(c[3]),
-      parseFloat(c[4]),
-      parseFloat(c[5]),
-    ]).reverse();
+    // Convert CoinGecko prices to [timestamp, open, high, low, close, volume]
+    return res.data.prices.map(p => [0, p[1], p[1], p[1], p[1], 0]).reverse();
   } catch (err) {
-    console.log("❌ Bybit Error:", err.message);
+    console.log("❌ CoinGecko Error:", err.message);
     return [];
   }
 }
 
-// ================== GENERATE SIGNAL ==================
-async function generateSignal(symbol) {
-  const candles = await getCandles(symbol);
+// ================== SIGNAL LOGIC ==================
+async function generateSignal(coinId) {
+  const candles = await getCandles(coinId);
   if (!candles.length) return null;
 
   const closes = candles.map(c => c[4]);
@@ -110,11 +89,11 @@ async function generateSignal(symbol) {
   if (lastEMA20 > lastEMA50) type = 'BUY';
   if (lastEMA20 < lastEMA50) type = 'SELL';
 
-  if (lastSignals[symbol] === type) return null;
-  lastSignals[symbol] = type;
+  if (lastSignals[coinId] === type || type === 'HOLD') return null;
+  lastSignals[coinId] = type;
 
   return {
-    coin: symbol.replace('USDT', '/USDT'),
+    coin: coinId.toUpperCase(),
     type,
     entry: formatPrice(price),
     sl: formatPrice(price * (type === 'BUY' ? 0.995 : 1.005)),
@@ -144,11 +123,11 @@ async function postSignal(signal) {
 }
 
 // ================== CRON ENDPOINT ==================
-// Triggered by Render cron job every 5–10 min
+// Use Render Cron Job to hit this endpoint every 5–10 minutes
 app.get('/scan', async (req, res) => {
-  const symbols = await getTopCoins();
-  for (let sym of symbols) {
-    const signal = await generateSignal(sym);
+  const coins = await getTopCoins(10);
+  for (let coin of coins) {
+    const signal = await generateSignal(coin);
     if (signal) await postSignal(signal);
   }
   res.send('Scan completed ✅');
@@ -157,7 +136,7 @@ app.get('/scan', async (req, res) => {
 // ================== ADMIN COMMANDS ==================
 bot.onText(/\/start/, (msg) => {
   if (msg.chat.id !== ADMIN_ID) return;
-  bot.sendMessage(msg.chat.id, '🤖 Bot Running 🚀');
+  bot.sendMessage(msg.chat.id, '🤖 CoinGecko Bot Running 🚀');
 });
 
 bot.onText(/\/test/, async (msg) => {
@@ -169,5 +148,5 @@ bot.onText(/\/test/, async (msg) => {
     sl: '0',
     targets: ['0', '0']
   });
-  bot.sendMessage(msg.chat.id, '✅ Test sent');
+  bot.sendMessage(msg.chat.id, '✅ Test signal sent');
 });
