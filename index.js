@@ -61,11 +61,12 @@ async function getBTCTrend() {
   }
 }
 
+
 // ================== TREND (MTF) ==================
 async function getTrend(symbol, interval) {
   try {
     const res = await axios.get(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=50`,
+      `https://api1.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=50`,
     );
 
     const closes = res.data.map((c) => parseFloat(c[4]));
@@ -112,7 +113,7 @@ async function getNewsSentiment(symbol) {
 // ================== TOP COINS ==================
 async function getTopCoins() {
   const res = await axios.get(
-    'https://api.binance.com/api/v3/ticker/24hr',
+    'https://api2.binance.com/api/v3/ticker/24hr',
   );
 
   return res.data
@@ -126,7 +127,7 @@ async function getTopCoins() {
 async function getCandles(symbol) {
   try {
     const res = await axios.get(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`,
+      `https://api3.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`,
     );
     return res.data;
   } catch {
