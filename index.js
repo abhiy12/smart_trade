@@ -5,7 +5,7 @@ const ti = require('technicalindicators');
 
 // ================== CONFIG ==================
 
-const TOKEN = '8531708840:AAHlTbAQSUGHPzn_UJLleoVqGBZUzncWlro';
+const TOKEN = '8531708840:AAEhxxukq0c1aoytfxM6l952aFWL__rLsr0';
 const ADMIN_ID = 5690207061;
 
 const CHANNELS = [-1003784336023];
