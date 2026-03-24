@@ -4,7 +4,7 @@ const axios = require('axios');
 const ti = require('technicalindicators');
 
 // ================== CONFIG ==================
-const TOKEN = '8531708840:AAEhxxukq0c1aoytfxM6l952aFWL__rLsr0';
+const TOKEN = '8531708840:AAFqCJir8nX6tIOWflNyvSraVYLcG0Ib6oQ';
 const ADMIN_ID = 5690207061;
 const CHANNELS = [-1003784336023];
 
